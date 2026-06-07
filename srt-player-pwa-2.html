@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#f5f0e8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="SRT Player">
+<title>SRT Player</title>
+
+<!-- PWA Manifest inline -->
+<script>
+const manifestData = {
+  name: "SRT Player",
+  short_name: "SRTPlayer",
+  description: "Lettore audio con sottotitoli e momenti visivi",
+  start_url: ".",
+  display: "standalone",
+  background_color: "#f5f0e8",
+  theme_color: "#8b5e3c",
+  icons: [{
+    src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='32' fill='%238b5e3c'/%3E%3Ctext x='96' y='130' font-size='100' text-anchor='middle' fill='white'%3E🎵%3C/text%3E%3C/svg%3E",
+    sizes: "192x192", type: "image/svg+xml"
+  }]
+};
+const blob = new Blob([JSON.stringify(manifestData)], {type: 'application/json'});
+const manifestUrl = URL.createObjectURL(blob);
+const link = document.createElement('link');
+link.rel = 'manifest';
+link.href = manifestUrl;
+document.head.appendChild(link);
+</script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@400;600;700&family=Inter:wght@400;500&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f5f0e8; --surface: #ede8de; --surface2: #e4ddd0;
+  --border: #cdc5b4; --text: #2a2318; --muted: #9a9080;
+  --past: #b8ad9e; --accent: #8b5e3c; --accent-bg: #e8d9c8;
+  --hl-bg: #e0d8c8; --img-bg: #1a1510;
+}
+html, body { height: 100%; overflow: hidden; }
+body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; }
+
+/* ── SCREENS ── */
+.screen { display: none; flex-direction: column; height: 100%; }
+.screen.active { display: flex; }
+
+/* ── SCREEN 1: UPLOAD ── */
+#s-upload { overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.upload-inner { display: flex; flex-direction: column; align-items: center; padding: 1.5rem 1.25rem 4rem; gap: 1.25rem; max-width: 560px; margin: 0 auto; width: 100%; }
+
+h1 { font-family: 'Lora', Georgia, serif; font-weight: 700; font-size: clamp(1.8rem,6vw,2.8rem); letter-spacing: -0.02em; color: var(--text); }
+h1 span { color: var(--accent); }
+.tagline { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; }
+
+/* File boxes */
+.file-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; width: 100%; }
+.file-box {
+  border: 1.5px dashed var(--border); border-radius: 14px;
+  padding: 1.25rem 0.75rem; display: flex; flex-direction: column;
+  align-items: center; gap: 0.4rem; background: var(--surface);
+  transition: border-color 0.2s, background 0.2s; position: relative; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; min-height: 120px; justify-content: center;
+}
+.file-box.loaded { border-color: var(--accent); border-style: solid; background: var(--accent-bg); }
+.file-box input[type=file] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; font-size: 0; }
+.file-box-icon { font-size: 1.6rem; pointer-events: none; }
+.file-box-label { font-family: 'Lora', serif; font-weight: 600; font-size: 0.78rem; color: var(--muted); pointer-events: none; text-align: center; }
+.file-box.loaded .file-box-label { color: var(--accent); }
+.file-box-hint { font-size: 0.58rem; color: var(--muted); opacity: 0.6; pointer-events: none; }
+.file-box.loaded .file-box-hint { display: none; }
+.file-box-name { font-size: 0.58rem; color: var(--accent); display: none; word-break: break-all; text-align: center; padding: 0 0.3rem; pointer-events: none; }
+.file-box.loaded .file-box-name { display: block; }
+
+/* Panels */
+.panel { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.panel-hdr { display: flex; align-items: center; justify-content: space-between; padding: 0.8rem 1.1rem; cursor: pointer; -webkit-tap-highlight-color: transparent; user-select: none; }
+.panel-hdr-left { display: flex; flex-direction: column; gap: 0.1rem; }
+.panel-title { font-family: 'Lora', serif; font-weight: 600; font-size: 0.82rem; color: var(--text); }
+.panel-sub { font-size: 0.64rem; color: var(--muted); }
+.panel-chevron { font-size: 0.6rem; color: var(--muted); transition: transform 0.2s; }
+.panel.open .panel-chevron { transform: rotate(180deg); }
+.panel-body { display: none; padding: 0 1.1rem 1.1rem; flex-direction: column; gap: 0.8rem; }
+.panel.open .panel-body { display: flex; }
+
+/* Mode tabs */
+.tabs { display: flex; background: var(--surface2); border-radius: 9px; padding: 3px; gap: 2px; }
+.tab { flex: 1; border: none; background: transparent; font-family: 'Inter', sans-serif; font-size: 0.7rem; color: var(--muted); padding: 0.4rem 0.3rem; border-radius: 7px; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background 0.15s, color 0.15s; }
+.tab.active { background: var(--bg); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.mode-panel { display: none; flex-direction: column; gap: 0.7rem; }
+.mode-panel.active { display: flex; }
+
+/* Info note */
+.info-note { font-size: 0.68rem; color: var(--muted); line-height: 1.5; padding: 0.5rem 0.75rem; background: var(--surface2); border-radius: 8px; border-left: 2px solid var(--accent); }
+.info-note strong { color: var(--accent); display: block; margin-bottom: 0.15rem; }
+
+/* Stepper */
+.opt-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.opt-label { font-size: 0.76rem; color: var(--text); line-height: 1.3; }
+.opt-label small { display: block; font-size: 0.63rem; color: var(--muted); margin-top: 0.1rem; }
+.stepper { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+.stp-btn { width: 32px; height: 32px; border: none; background: var(--surface2); color: var(--text); font-size: 1rem; cursor: pointer; -webkit-tap-highlight-color: transparent; display: flex; align-items: center; justify-content: center; }
+.stp-val { min-width: 38px; text-align: center; font-family: 'Lora', serif; font-weight: 600; font-size: 0.85rem; color: var(--text); background: var(--bg); height: 32px; line-height: 32px; }
+
+/* Moment rows */
+.moment-row { background: var(--surface2); border-radius: 10px; padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.45rem; }
+.moment-inputs { display: flex; gap: 0.4rem; align-items: center; }
+.m-time { width: 58px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 0.76rem; padding: 0.32rem 0.4rem; text-align: center; }
+.m-desc { flex: 1; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 0.76rem; padding: 0.32rem 0.5rem; }
+.m-time:focus, .m-desc:focus { outline: none; border-color: var(--accent); }
+.m-btn { width: 30px; height: 30px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; flex-shrink: 0; }
+.m-btn-gen { background: var(--accent-bg); color: var(--accent); }
+.m-btn-del { background: var(--surface); color: var(--muted); }
+.m-status { font-size: 0.64rem; color: var(--muted); display: none; }
+.m-status.show { display: block; }
+.m-status.ok { color: #5a7a3a; }
+.m-status.err { color: #a03020; }
+.m-preview { display: none; border-radius: 8px; overflow: hidden; }
+.m-preview.show { display: block; }
+.m-preview img { width: 100%; height: 80px; object-fit: cover; display: block; }
+
+/* Duration */
+.dur-row { display: flex; align-items: center; gap: 0.6rem; }
+.dur-slider { flex: 1; accent-color: var(--accent); }
+.dur-val { font-family: 'Lora', serif; font-weight: 600; font-size: 0.82rem; color: var(--accent); min-width: 28px; }
+
+/* Project list */
+.project-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 200px; overflow-y: auto; }
+.project-item { display: flex; align-items: center; justify-content: space-between; padding: 0.55rem 0.7rem; background: var(--surface2); border-radius: 9px; }
+.project-item-name { font-size: 0.78rem; color: var(--text); font-family: 'Lora', serif; }
+.project-item-date { font-size: 0.62rem; color: var(--muted); }
+.project-item-btns { display: flex; gap: 0.3rem; }
+.proj-btn { border: none; border-radius: 6px; padding: 0.25rem 0.5rem; font-size: 0.65rem; cursor: pointer; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+.proj-btn-load { background: var(--accent-bg); color: var(--accent); }
+.proj-btn-del { background: var(--surface); color: var(--muted); }
+
+.proj-actions { display: flex; gap: 0.5rem; }
+.proj-action-btn { flex: 1; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-family: 'Lora', serif; font-weight: 600; font-size: 0.75rem; padding: 0.55rem 0.7rem; border-radius: 10px; cursor: pointer; text-align: center; -webkit-tap-highlight-color: transparent; }
+.proj-action-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+#btn-add-moment { background: none; border: 1.5px dashed var(--border); color: var(--muted); font-family: 'Inter', sans-serif; font-size: 0.73rem; padding: 0.38rem 0.8rem; border-radius: 8px; cursor: pointer; align-self: flex-start; -webkit-tap-highlight-color: transparent; }
+
+/* Start button */
+#btn-start { background: var(--accent); color: #fff; border: none; font-family: 'Lora', Georgia, serif; font-weight: 700; font-size: 1rem; padding: 0.85rem 2.5rem; border-radius: 50px; cursor: pointer; opacity: 0.35; pointer-events: none; transition: opacity 0.2s, transform 0.15s; -webkit-tap-highlight-color: transparent; align-self: center; }
+#btn-start.ready { opacity: 1; pointer-events: all; }
+
+/* ── SCREEN 2: PLAYER ── */
+#s-player { overflow: hidden; }
+.topbar { background: var(--surface2); border-bottom: 1px solid var(--border); padding: 0.65rem 1rem; flex-shrink: 0; }
+.ctrl-row { display: flex; align-items: center; gap: 0.6rem; }
+.btn-back { background: none; border: 1px solid var(--border); color: var(--muted); font-family: 'Inter', sans-serif; font-size: 0.7rem; padding: 0.28rem 0.6rem; border-radius: 6px; cursor: pointer; flex-shrink: 0; -webkit-tap-highlight-color: transparent; }
+.btn-play { width: 38px; height: 38px; border-radius: 50%; background: var(--accent); border: none; color: #fff; font-size: 1rem; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+.progress-wrap { flex: 1; height: 4px; background: var(--border); border-radius: 2px; cursor: pointer; position: relative; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 2px; width: 0%; pointer-events: none; transition: width 0.1s linear; }
+.time-disp { font-size: 0.64rem; color: var(--muted); min-width: 82px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.speed-btn { background: var(--surface); border: 1px solid var(--border); color: var(--muted); font-family: 'Inter', sans-serif; font-size: 0.65rem; padding: 0.25rem 0.45rem; border-radius: 6px; cursor: pointer; flex-shrink: 0; -webkit-tap-highlight-color: transparent; }
+
+/* Image panel */
+#img-panel { height: 0; overflow: hidden; background: var(--img-bg); flex-shrink: 0; transition: height 1.3s cubic-bezier(0.4,0,0.2,1); position: relative; }
+#img-panel.show { height: 40vh; }
+#moment-img { width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.8s ease;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 78%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 78%, transparent 100%);
+}
+#moment-img.show { opacity: 1; }
+
+/* Transcript */
+#transcript-wrap { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+#transcript { padding: 1.5rem 1.25rem 5rem; max-width: 660px; margin: 0 auto; line-height: 1.9; font-size: 1.05rem; font-weight: 400; color: var(--text); }
+
+.grp {
+  display: inline;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  background-color: transparent;
+  transition: color 0.3s, background-color 0.4s;
+  padding: 0.1em 0.15em; margin: -0.1em -0.15em; border-radius: 4px;
+  cursor: pointer;
+}
+.grp.future { color: var(--muted); }
+.grp.past { color: var(--past); }
+.grp.playing { color: var(--text); background-color: var(--hl-bg); }
+
+.grp-ts { display: inline; font-size: 0.67rem; font-variant-numeric: tabular-nums; cursor: pointer; margin-right: 0.22em; transition: color 0.3s; }
+.grp.future .grp-ts, .grp.past .grp-ts { color: #cdc5b4; }
+.grp.playing .grp-ts { color: var(--accent); }
+
+/* Loading overlay */
+#loading { display: none; position: fixed; inset: 0; background: rgba(245,240,232,0.93); z-index: 300; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; }
+#loading.show { display: flex; }
+.spinner { width: 34px; height: 34px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.85s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-msg { font-family: 'Lora', serif; font-size: 0.85rem; color: var(--muted); text-align: center; max-width: 220px; line-height: 1.5; }
+.loading-msg strong { color: var(--accent); display: block; margin-bottom: 0.2rem; }
+
+/* Project name modal */
+#modal { display: none; position: fixed; inset: 0; background: rgba(42,35,24,0.5); z-index: 400; align-items: center; justify-content: center; padding: 1.5rem; }
+#modal.show { display: flex; }
+.modal-box { background: var(--bg); border-radius: 16px; padding: 1.5rem; width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 1rem; }
+.modal-title { font-family: 'Lora', serif; font-weight: 700; font-size: 0.95rem; color: var(--text); }
+.modal-input { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-family: 'Inter', sans-serif; font-size: 0.85rem; padding: 0.6rem 0.8rem; width: 100%; }
+.modal-input:focus { outline: none; border-color: var(--accent); }
+.modal-btns { display: flex; gap: 0.6rem; }
+.modal-btn { flex: 1; border: none; border-radius: 9px; padding: 0.6rem; font-family: 'Lora', serif; font-weight: 600; font-size: 0.82rem; cursor: pointer; }
+.modal-btn.cancel { background: var(--surface2); color: var(--muted); }
+.modal-btn.confirm { background: var(--accent); color: #fff; }
+
+@media (max-width: 380px) {
+  .file-boxes { grid-template-columns: 1fr; }
+  #transcript { font-size: 0.97rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══ SCREEN 1: UPLOAD ══ -->
+<div class="screen active" id="s-upload">
+<div class="upload-inner">
+
+  <div style="text-align:center">
+    <h1>SRT <span>Player</span></h1>
+    <div class="tagline">Tocca il testo — salta nel tempo</div>
+  </div>
+
+  <!-- Files -->
+  <div class="file-boxes">
+    <label class="file-box" id="box-audio">
+      <input type="file" accept="audio/*,video/*" id="input-audio">
+      <div class="file-box-icon">🎵</div>
+      <div class="file-box-label">File Audio</div>
+      <div class="file-box-name" id="audio-name"></div>
+      <div class="file-box-hint">mp3 · wav · m4a</div>
+    </label>
+    <label class="file-box" id="box-srt">
+      <input type="file" accept=".srt,.vtt,.txt" id="input-srt">
+      <div class="file-box-icon">📄</div>
+      <div class="file-box-label">Sottotitoli</div>
+      <div class="file-box-name" id="srt-name"></div>
+      <div class="file-box-hint">.srt · .vtt</div>
+    </label>
+  </div>
+
+  <!-- Grouping panel -->
+  <div class="panel" id="p-group">
+    <div class="panel-hdr">
+      <div class="panel-hdr-left">
+        <span class="panel-title">Raggruppamento testo</span>
+        <span class="panel-sub" id="group-sub">AI automatico</span>
+      </div>
+      <span class="panel-chevron">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="tabs">
+        <button class="tab active" data-mode="ai">✦ AI</button>
+        <button class="tab" data-mode="chunks">Settori</button>
+        <button class="tab" data-mode="words">Parole</button>
+      </div>
+      <div class="mode-panel active" id="mp-ai">
+        <div class="info-note"><strong>Raggruppamento semantico</strong>Claude analizza il testo e crea gruppi di senso compiuto.</div>
+      </div>
+      <div class="mode-panel" id="mp-chunks">
+        <div class="opt-row">
+          <div class="opt-label">Settori per gruppo<small>Quanti spezzoni SRT accorpare</small></div>
+          <div class="stepper">
+            <button class="stp-btn" data-target="chunks" data-delta="-1">−</button>
+            <div class="stp-val" id="val-chunks">4</div>
+            <button class="stp-btn" data-target="chunks" data-delta="1">+</button>
+          </div>
+        </div>
+      </div>
+      <div class="mode-panel" id="mp-words">
+        <div class="opt-row">
+          <div class="opt-label">Parole massime<small>Chiude alla frase più vicina</small></div>
+          <div class="stepper">
+            <button class="stp-btn" data-target="words" data-delta="-5">−</button>
+            <div class="stp-val" id="val-words">30</div>
+            <button class="stp-btn" data-target="words" data-delta="5">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Moments panel -->
+  <div class="panel" id="p-moments">
+    <div class="panel-hdr">
+      <div class="panel-hdr-left">
+        <span class="panel-title">Momenti visivi</span>
+        <span class="panel-sub" id="moments-sub">Nessun momento</span>
+      </div>
+      <span class="panel-chevron">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="info-note"><strong>Come funziona</strong>Indica timestamp e descrizione. Al momento giusto appare un'immagine evocativa generata da AI.</div>
+      <div id="moments-list"></div>
+      <button id="btn-add-moment">+ Aggiungi momento</button>
+      <div class="dur-row">
+        <span class="opt-label" style="flex-shrink:0">Durata immagine</span>
+        <input type="range" class="dur-slider" id="dur-slider" min="2" max="8" step="0.5" value="4">
+        <span class="dur-val" id="dur-val">4s</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Projects panel -->
+  <div class="panel" id="p-projects">
+    <div class="panel-hdr">
+      <div class="panel-hdr-left">
+        <span class="panel-title">Progetti salvati</span>
+        <span class="panel-sub" id="projects-sub">Caricamento…</span>
+      </div>
+      <span class="panel-chevron">▼</span>
+    </div>
+    <div class="panel-body">
+      <div class="project-list" id="project-list">
+        <div style="font-size:0.72rem;color:var(--muted);text-align:center;padding:0.5rem">Nessun progetto salvato</div>
+      </div>
+      <div class="proj-actions">
+        <button class="proj-action-btn">💾 Salva progetto</button>
+        <button class="proj-action-btn">✕ Nuovo</button>
+      </div>
+      <div class="info-note"><strong>Storage locale</strong>I progetti vengono salvati sul tuo dispositivo. Nessun cloud, nessun account.</div>
+    </div>
+  </div>
+
+  <button id="btn-start">Apri Player →</button>
+
+</div>
+</div>
+
+<!-- ══ SCREEN 2: PLAYER ══ -->
+<div class="screen" id="s-player">
+  <div class="topbar">
+    <div class="ctrl-row">
+      <button class="btn-back">← File</button>
+      <button class="btn-play" id="btn-play">▶</button>
+      <div class="progress-wrap" id="prog-wrap">
+        <div class="progress-fill" id="prog-fill"></div>
+      </div>
+      <span class="time-disp" id="time-disp">0:00 / 0:00</span>
+      <button class="speed-btn" id="speed-btn">1×</button>
+    </div>
+  </div>
+  <div id="img-panel">
+    <img id="moment-img" src="" alt="">
+  </div>
+  <div id="transcript-wrap">
+    <div id="transcript"></div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="loading-msg" id="loading-msg"><strong>Elaborazione…</strong>Un momento</div>
+</div>
+
+<!-- Modal nome progetto -->
+<div id="modal">
+  <div class="modal-box">
+    <div class="modal-title">Nome del progetto</div>
+    <input type="text" class="modal-input" id="modal-input" placeholder="Es. Lettura Mario Rossi…">
+    <div class="modal-btns">
+      <button class="modal-btn cancel">Annulla</button>
+      <button class="modal-btn confirm">Salva</button>
+    </div>
+  </div>
+</div>
+
+<audio id="audio"></audio>
+
+<script>
+// ════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════
+var rawCues    = [];
+var groups     = [];
+var cueToGroup = [];
+var groupEls   = [];
+var activeGrp  = -1;
+var lastMomSec = -1;
+var imgTimer   = null;
+var audioFile  = null;
+var srtFile    = null;
+var speeds     = [0.75, 1, 1.25, 1.5, 1.75, 2];
+var speedIdx   = 1;
+var groupMode  = 'ai';
+var chunkSize  = 4;
+var maxWords   = 30;
+var moments    = [];
+var imgDuration= 4;
+var momentId   = 0;
+var currentProjectName = null;
+
+var audio = document.getElementById('audio');
+var transcript = document.getElementById('transcript');
+var transcriptWrap = document.getElementById('transcript-wrap');
+
+// ════════════════════════════════════════════
+// INDEXEDDB
+// ════════════════════════════════════════════
+var DB_NAME = 'srt-player', DB_VER = 1, db = null;
+
+function openDB() {
+  return new Promise(function(res, rej) {
+    var req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = function(e) {
+      var d = e.target.result;
+      if (!d.objectStoreNames.contains('projects')) {
+        d.createObjectStore('projects', { keyPath: 'name' });
+      }
+    };
+    req.onsuccess = function(e) { db = e.target.result; res(db); };
+    req.onerror = function() { rej(req.error); };
+  });
+}
+
+function dbSave(project) {
+  return new Promise(function(res, rej) {
+    var tx = db.transaction('projects', 'readwrite');
+    tx.objectStore('projects').put(project);
+    tx.oncomplete = res; tx.onerror = function() { rej(tx.error); };
+  });
+}
+
+function dbGetAll() {
+  return new Promise(function(res, rej) {
+    var tx = db.transaction('projects', 'readonly');
+    var req = tx.objectStore('projects').getAll();
+    req.onsuccess = function() { res(req.result); };
+    req.onerror = function() { rej(req.error); };
+  });
+}
+
+function dbDelete(name) {
+  return new Promise(function(res, rej) {
+    var tx = db.transaction('projects', 'readwrite');
+    tx.objectStore('projects').delete(name);
+    tx.oncomplete = res; tx.onerror = function() { rej(tx.error); };
+  });
+}
+
+function dbGet(name) {
+  return new Promise(function(res, rej) {
+    var tx = db.transaction('projects', 'readonly');
+    var req = tx.objectStore('projects').get(name);
+    req.onsuccess = function() { res(req.result); };
+    req.onerror = function() { rej(req.error); };
+  });
+}
+
+// ════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════
+openDB().then(function() {
+  refreshProjectList();
+});
+
+// ════════════════════════════════════════════
+// FILE INPUTS
+// ════════════════════════════════════════════
+document.getElementById('input-audio').addEventListener('change', function() {
+  var f = this.files && this.files[0];
+  if (!f) return;
+  audioFile = f;
+  audio.src = URL.createObjectURL(f);
+  document.getElementById('box-audio').classList.add('loaded');
+  document.getElementById('audio-name').textContent = f.name.length > 22 ? f.name.slice(0,22)+'…' : f.name;
+  checkReady();
+});
+
+document.getElementById('input-srt').addEventListener('change', function() {
+  var f = this.files && this.files[0];
+  if (!f) return;
+  srtFile = f;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var ext = f.name.split('.').pop().toLowerCase();
+    rawCues = ext === 'vtt' ? parseVTT(e.target.result) : parseSRT(e.target.result);
+    document.getElementById('box-srt').classList.add('loaded');
+    document.getElementById('srt-name').textContent = f.name.length > 22 ? f.name.slice(0,22)+'…' : f.name;
+    checkReady();
+  };
+  reader.readAsText(f);
+});
+
+function checkReady() {
+  var btn = document.getElementById('btn-start');
+  if (audio.src || rawCues.length > 0) btn.classList.add('ready');
+}
+
+// ════════════════════════════════════════════
+// PANELS & TABS
+// ════════════════════════════════════════════
+function togglePanel(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+function setGroupMode(m) {
+  groupMode = m;
+  document.querySelectorAll('.tab').forEach(function(b) { b.classList.toggle('active', b.dataset.mode === m); });
+  document.querySelectorAll('.mode-panel').forEach(function(p) { p.classList.remove('active'); });
+  document.getElementById('mp-' + m).classList.add('active');
+  updateGroupSub();
+}
+
+function updateGroupSub() {
+  var el = document.getElementById('group-sub');
+  if (groupMode === 'ai')     el.textContent = 'AI automatico';
+  if (groupMode === 'chunks') el.textContent = chunkSize + ' settori per gruppo';
+  if (groupMode === 'words')  el.textContent = 'max ' + maxWords + ' parole';
+}
+
+var stepLimits = { chunks: {min:1,max:12,def:4}, words: {min:5,max:100,def:30} };
+function stepVal(tgt, d) {
+  var lim = stepLimits[tgt];
+  if (tgt === 'chunks') { chunkSize = Math.min(lim.max, Math.max(lim.min, chunkSize+d)); document.getElementById('val-chunks').textContent = chunkSize; }
+  else { maxWords = Math.min(lim.max, Math.max(lim.min, maxWords+d)); document.getElementById('val-words').textContent = maxWords; }
+  updateGroupSub();
+}
+
+document.getElementById('dur-slider').addEventListener('input', function() {
+  imgDuration = parseFloat(this.value);
+  document.getElementById('dur-val').textContent = imgDuration + 's';
+});
+
+// ════════════════════════════════════════════
+// MOMENTS
+// ════════════════════════════════════════════
+function addMoment(data) {
+  data = data || {};
+  var id = ++momentId;
+  var m = { id: id, time: data.time||0, timeStr: data.timeStr||'0:00', desc: data.desc||'', imgUrl: data.imgUrl||null, prompt: data.prompt||'' };
+  moments.push(m);
+  renderMomentRow(m);
+  updateMomentsSub();
+}
+
+function renderMomentRow(m) {
+  var list = document.getElementById('moments-list');
+  var row = document.createElement('div');
+  row.className = 'moment-row'; row.id = 'mrow-' + m.id;
+
+  var inp = document.createElement('div'); inp.className = 'moment-inputs';
+  var tInp = document.createElement('input'); tInp.type='text'; tInp.className='m-time'; tInp.value=m.timeStr; tInp.placeholder='0:00';
+  tInp.addEventListener('change', function() { m.timeStr=this.value.trim(); m.time=parseTimeStr(m.timeStr); });
+  var dInp = document.createElement('input'); dInp.type='text'; dInp.className='m-desc'; dInp.value=m.desc; dInp.placeholder='Parola chiave…';
+  dInp.addEventListener('input', function() { m.desc=this.value; });
+  var gBtn = document.createElement('button'); gBtn.className='m-btn m-btn-gen'; gBtn.textContent='✦'; gBtn.title='Genera';
+  gBtn.addEventListener('click', function() { m.desc=dInp.value; m.timeStr=tInp.value.trim(); m.time=parseTimeStr(m.timeStr); generateImage(m); });
+  var dBtn = document.createElement('button'); dBtn.className='m-btn m-btn-del'; dBtn.textContent='✕';
+  dBtn.addEventListener('click', function() { moments=moments.filter(function(x){return x.id!==m.id;}); row.remove(); updateMomentsSub(); });
+  inp.appendChild(tInp); inp.appendChild(dInp); inp.appendChild(gBtn); inp.appendChild(dBtn);
+
+  var status = document.createElement('div'); status.className='m-status'; status.id='mst-'+m.id;
+  var preview = document.createElement('div'); preview.className='m-preview'; preview.id='mpv-'+m.id;
+  if (m.imgUrl) {
+    var img = document.createElement('img'); img.src=m.imgUrl;
+    preview.appendChild(img); preview.classList.add('show');
+  }
+
+  row.appendChild(inp); row.appendChild(status); row.appendChild(preview);
+  list.appendChild(row);
+}
+
+function updateMomentsSub() {
+  var n = moments.length, ok = moments.filter(function(m){return m.imgUrl;}).length;
+  document.getElementById('moments-sub').textContent = n===0 ? 'Nessun momento' : n+' moment'+(n>1?'i':'o')+' · '+ok+' immagini';
+}
+
+async function generateImage(m) {
+  var status = document.getElementById('mst-' + m.id);
+  var preview = document.getElementById('mpv-' + m.id);
+  if (!m.desc) { alert('Inserisci una descrizione.'); return; }
+  status.textContent = '⏳ Generazione…'; status.className = 'm-status show';
+
+  try {
+    var res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514', max_tokens: 200,
+        system: 'Sei un artista visivo. Genera un prompt in inglese per un generatore di immagini AI (max 80 parole) che crei un\'immagine evocativa, simbolica e misteriosa adatta a una lettura numerologica o astrologica. Stile: pittura simbolica, colori caldi e profondi, atmosfera onirica. Rispondi SOLO con il prompt, nessun testo aggiuntivo.',
+        messages: [{ role:'user', content:'Descrizione: "'+m.desc+'"' }]
+      })
+    });
+    var data = await res.json();
+    var tb = data.content.find(function(b){return b.type==='text';});
+    var imgPrompt = (tb && tb.text) ? tb.text.trim() : m.desc;
+    m.prompt = imgPrompt;
+
+    status.textContent = '🖼 Download immagine…';
+    var seed = Math.floor(Math.random()*99999);
+    var imgUrl = 'https://image.pollinations.ai/prompt/'+encodeURIComponent(imgPrompt)+'?width=800&height=500&seed='+seed+'&nologo=true&model=flux';
+    var imgRes = await fetch(imgUrl);
+    if (!imgRes.ok) throw new Error('Errore download');
+    var blob = await imgRes.blob();
+    m.imgUrl = URL.createObjectURL(blob);
+    m.imgBlob = blob;
+
+    preview.innerHTML = '';
+    var img = document.createElement('img'); img.src = m.imgUrl;
+    preview.appendChild(img); preview.classList.add('show');
+    status.textContent = '✓ Pronta'; status.className = 'm-status show ok';
+    setTimeout(function() { status.classList.remove('show'); }, 2000);
+    updateMomentsSub();
+  } catch(err) {
+    status.textContent = '✕ ' + err.message; status.className = 'm-status show err';
+  }
+}
+
+// ════════════════════════════════════════════
+// PROJECTS — IndexedDB
+// ════════════════════════════════════════════
+async function refreshProjectList() {
+  if (!db) return;
+  var projects = await dbGetAll();
+  var sub = document.getElementById('projects-sub');
+  sub.textContent = projects.length === 0 ? 'Nessun progetto' : projects.length + ' progett' + (projects.length===1?'o':'i');
+
+  var list = document.getElementById('project-list');
+  list.innerHTML = '';
+  if (projects.length === 0) {
+    list.innerHTML = '<div style="font-size:0.72rem;color:var(--muted);text-align:center;padding:0.5rem">Nessun progetto salvato</div>';
+    return;
+  }
+  projects.sort(function(a,b){return (b.savedAt||0)-(a.savedAt||0);});
+  projects.forEach(function(p) {
+    var item = document.createElement('div'); item.className = 'project-item';
+    var info = document.createElement('div');
+    var name = document.createElement('div'); name.className='project-item-name'; name.textContent=p.name;
+    var date = document.createElement('div'); date.className='project-item-date';
+    date.textContent = p.savedAt ? new Date(p.savedAt).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+    info.appendChild(name); info.appendChild(date);
+    var btns = document.createElement('div'); btns.className='project-item-btns';
+    var load = document.createElement('button'); load.className='proj-btn proj-btn-load'; load.textContent='Apri';
+    load.addEventListener('click', function() { loadProject(p.name); });
+    var del = document.createElement('button'); del.className='proj-btn proj-btn-del'; del.textContent='✕';
+    del.addEventListener('click', async function() {
+      if (confirm('Eliminare "'+p.name+'"?')) { await dbDelete(p.name); refreshProjectList(); }
+    });
+    btns.appendChild(load); btns.appendChild(del);
+    item.appendChild(info); item.appendChild(btns);
+    list.appendChild(item);
+  });
+}
+
+function saveProject() {
+  document.getElementById('modal-input').value = currentProjectName || '';
+  document.getElementById('modal').classList.add('show');
+  document.getElementById('modal-input').focus();
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+async function confirmSave() {
+  var name = document.getElementById('modal-input').value.trim();
+  if (!name) { alert('Inserisci un nome.'); return; }
+  closeModal();
+  showLoading('Salvataggio…', 'Salvataggio in locale');
+
+  // Serialize moments with blob as base64
+  var serialMoments = [];
+  for (var i=0; i<moments.length; i++) {
+    var m = moments[i];
+    var imgData = null;
+    if (m.imgBlob) {
+      imgData = await blobToBase64(m.imgBlob);
+    }
+    serialMoments.push({ id:m.id, time:m.time, timeStr:m.timeStr, desc:m.desc, prompt:m.prompt, imgData:imgData });
+  }
+
+  // Serialize audio as base64 if available
+  var audioData = null, audioName = null;
+  if (audioFile) { audioData = await blobToBase64(audioFile); audioName = audioFile.name; }
+
+  // Serialize srt as text
+  var srtText = null, srtName = null;
+  if (srtFile) {
+    srtText = await new Promise(function(res) { var r=new FileReader(); r.onload=function(e){res(e.target.result);}; r.readAsText(srtFile); });
+    srtName = srtFile.name;
+  }
+
+  var project = {
+    name: name, savedAt: Date.now(),
+    groupMode: groupMode, chunkSize: chunkSize, maxWords: maxWords, imgDuration: imgDuration,
+    audioData: audioData, audioName: audioName,
+    srtText: srtText, srtName: srtName,
+    moments: serialMoments
+  };
+
+  await dbSave(project);
+  currentProjectName = name;
+  hideLoading();
+  refreshProjectList();
+  document.getElementById('p-projects').classList.add('open');
+}
+
+async function loadProject(name) {
+  var p = await dbGet(name);
+  if (!p) return;
+  showLoading('Caricamento…', p.name);
+  currentProjectName = p.name;
+
+  // Restore audio
+  if (p.audioData && p.audioName) {
+    var aBlob = base64ToBlob(p.audioData);
+    audioFile = new File([aBlob], p.audioName, {type:'audio/mpeg'});
+    audio.src = URL.createObjectURL(aBlob);
+    document.getElementById('box-audio').classList.add('loaded');
+    document.getElementById('audio-name').textContent = p.audioName.slice(0,22);
+  }
+
+  // Restore SRT
+  if (p.srtText && p.srtName) {
+    srtFile = new File([p.srtText], p.srtName, {type:'text/plain'});
+    var ext = p.srtName.split('.').pop().toLowerCase();
+    rawCues = ext==='vtt' ? parseVTT(p.srtText) : parseSRT(p.srtText);
+    document.getElementById('box-srt').classList.add('loaded');
+    document.getElementById('srt-name').textContent = p.srtName.slice(0,22);
+  }
+
+  // Restore settings
+  groupMode = p.groupMode || 'ai';
+  chunkSize = p.chunkSize || 4;
+  maxWords  = p.maxWords  || 30;
+  imgDuration = p.imgDuration || 4;
+  document.getElementById('val-chunks').textContent = chunkSize;
+  document.getElementById('val-words').textContent  = maxWords;
+  document.getElementById('dur-slider').value = imgDuration;
+  document.getElementById('dur-val').textContent = imgDuration + 's';
+  setGroupMode(groupMode);
+
+  // Restore moments
+  moments = []; momentId = 0;
+  document.getElementById('moments-list').innerHTML = '';
+  for (var i=0; i<(p.moments||[]).length; i++) {
+    var md = p.moments[i];
+    var imgUrl = null, imgBlob = null;
+    if (md.imgData) { imgBlob = base64ToBlob(md.imgData); imgUrl = URL.createObjectURL(imgBlob); }
+    addMoment({ time:md.time, timeStr:md.timeStr, desc:md.desc, imgUrl:imgUrl, prompt:md.prompt||'' });
+    if (imgBlob) { moments[moments.length-1].imgBlob = imgBlob; moments[moments.length-1].imgUrl = imgUrl; }
+  }
+
+  checkReady();
+  hideLoading();
+  document.getElementById('p-projects').classList.remove('open');
+}
+
+function newProject() {
+  currentProjectName = null;
+  audioFile = null; srtFile = null; rawCues = []; moments = []; momentId = 0;
+  audio.src = '';
+  document.getElementById('box-audio').classList.remove('loaded');
+  document.getElementById('box-srt').classList.remove('loaded');
+  document.getElementById('audio-name').textContent = '';
+  document.getElementById('srt-name').textContent = '';
+  document.getElementById('moments-list').innerHTML = '';
+  document.getElementById('btn-start').classList.remove('ready');
+  updateMomentsSub();
+}
+
+// ════════════════════════════════════════════
+// START PLAYER
+// ════════════════════════════════════════════
+async function startPlayer() {
+  var g = [];
+  if (rawCues.length > 0) {
+    if (groupMode === 'ai') {
+      showLoading('Risegmentazione AI…', 'Claude sta raggruppando il testo per senso');
+      try { g = await segmentWithAI(rawCues); }
+      catch(err) { g = fallbackChunks(rawCues, chunkSize); }
+      hideLoading();
+    } else if (groupMode === 'chunks') {
+      g = fallbackChunks(rawCues, chunkSize);
+    } else {
+      g = groupByWords(rawCues, maxWords);
+    }
+  }
+  groups = g;
+  cueToGroup = new Array(rawCues.length).fill(-1);
+  groups.forEach(function(gr, gi) { gr.cueIndices.forEach(function(ci) { cueToGroup[ci] = gi; }); });
+  activeGrp = -1; lastMomSec = -1;
+  renderTranscript();
+  showScreen('s-player');
+  window.scrollTo(0,0);
+}
+
+// ════════════════════════════════════════════
+// PARSERS
+// ════════════════════════════════════════════
+function parseSRT(text) {
+  return text.trim().replace(/\r\n/g,'\n').split(/\n\n+/).map(function(block) {
+    var lines = block.split('\n'), tl = lines.find(function(l){return l.includes('-->');});
+    if (!tl) return null;
+    var parts = tl.split('-->'), start = srtToSec(parts[0].trim()), end = srtToSec(parts[1].trim());
+    var txt = lines.filter(function(l){return l&&!l.includes('-->')&&!/^\d+$/.test(l.trim());}).join(' ').replace(/<[^>]+>/g,'').trim();
+    return {start:start, end:end, text:txt};
+  }).filter(Boolean);
+}
+function parseVTT(text) {
+  var lines = text.replace(/\r\n/g,'\n').split('\n'), out=[], i=0;
+  while(i<lines.length) {
+    if(lines[i].includes('-->')) {
+      var p=lines[i].split('-->'), start=vttToSec(p[0].trim().split(' ')[0]), end=vttToSec(p[1].trim().split(' ')[0]);
+      var tls=[]; i++;
+      while(i<lines.length&&lines[i].trim()){tls.push(lines[i].replace(/<[^>]+>/g,'')); i++;}
+      if(tls.length) out.push({start:start,end:end,text:tls.join(' ')});
+    } else i++;
+  }
+  return out;
+}
+function srtToSec(t) { var a=t.split(':'),b=a[2].replace(',','.').split('.'); return +a[0]*3600+ +a[1]*60+ +b[0]++(b[1]||0)/1000; }
+function vttToSec(t) { var p=t.split(':'); if(p.length===2)p.unshift('0'); return +p[0]*3600+ +p[1]*60+parseFloat(p[2]); }
+function fmt(s) { var m=Math.floor(s/60),sec=Math.floor(s%60); return m+':'+(sec<10?'0':'')+sec; }
+function parseTimeStr(s) { var p=s.split(':').map(Number); if(p.length===3)return p[0]*3600+p[1]*60+p[2]; if(p.length===2)return p[0]*60+p[1]; return p[0]||0; }
+
+// ════════════════════════════════════════════
+// GROUPING
+// ════════════════════════════════════════════
+async function segmentWithAI(cues) {
+  var lines = cues.map(function(c,i){return i+'|'+fmt(c.start)+'|'+c.text;}).join('\n');
+  var res = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      model:'claude-sonnet-4-20250514', max_tokens:4000,
+      system:'Risegmenta trascrizioni in frasi naturali. Formato: INDICE|TEMPO|TESTO. Rispondi SOLO con array JSON: [{"indices":[0,1,2]},...]. Raggruppa per senso, max 8 per gruppo, copri tutti gli indici da 0 a '+(cues.length-1)+'.',
+      messages:[{role:'user',content:'Risegmenta:\n'+lines}]
+    })
+  });
+  if (!res.ok) throw new Error('API '+res.status);
+  var data = await res.json();
+  var tb = data.content.find(function(b){return b.type==='text';});
+  var raw = (tb&&tb.text)?tb.text:'';
+  var parsed = JSON.parse(raw.replace(/```[a-z]*\n?/gi,'').replace(/```/g,'').trim());
+  return parsed.map(function(g) {
+    var slice = g.indices.map(function(i){return cues[i];});
+    return {start:slice[0].start, end:slice[slice.length-1].end, text:slice.map(function(c){return c.text;}).join(' '), cueIndices:g.indices};
+  });
+}
+function fallbackChunks(cues, size) {
+  var out=[];
+  for(var i=0;i<cues.length;i+=size){
+    var s=cues.slice(i,i+size);
+    out.push({start:s[0].start,end:s[s.length-1].end,text:s.map(function(c){return c.text;}).join(' '),cueIndices:s.map(function(_,j){return i+j;})});
+  }
+  return out;
+}
+function groupByWords(cues, maxW) {
+  var out=[], cur=[], wc=0;
+  cues.forEach(function(cue,i) {
+    var w=cue.text.trim().split(/\s+/).length, ends=/[.!?…]$/.test(cue.text.trim());
+    cur.push(i); wc+=w;
+    if((wc>=maxW&&ends)||wc>=maxW*1.5){
+      var sl=cur.map(function(ci){return cues[ci];});
+      out.push({start:sl[0].start,end:sl[sl.length-1].end,text:sl.map(function(c){return c.text;}).join(' '),cueIndices:cur.slice()});
+      cur=[]; wc=0;
+    }
+  });
+  if(cur.length){var sl=cur.map(function(ci){return cues[ci];});out.push({start:sl[0].start,end:sl[sl.length-1].end,text:sl.map(function(c){return c.text;}).join(' '),cueIndices:cur.slice()});}
+  return out;
+}
+
+// ════════════════════════════════════════════
+// TRANSCRIPT
+// ════════════════════════════════════════════
+function renderTranscript() {
+  transcript.innerHTML = '';
+  groupEls = [];
+  if (!groups.length) { transcript.textContent = 'Nessun sottotitolo caricato.'; return; }
+  groups.forEach(function(g, gi) {
+    var span = document.createElement('span');
+    span.className = 'grp future';
+
+    var ts = document.createElement('span');
+    ts.className = 'grp-ts';
+    ts.textContent = '('+fmt(g.start)+') ';
+    ts.addEventListener('click', function(){seekTo(g.start);});
+
+    var words = document.createElement('span');
+    words.textContent = g.text + ' ';
+    words.addEventListener('click', function(){seekTo(g.start);});
+
+    span.appendChild(ts); span.appendChild(words);
+    transcript.appendChild(span);
+    groupEls.push(span);
+  });
+}
+
+// ════════════════════════════════════════════
+// PLAYBACK
+// ════════════════════════════════════════════
+function togglePlay() {
+  if (audio.paused) audio.play(); else audio.pause();
+}
+audio.addEventListener('play', function(){document.getElementById('btn-play').textContent='⏸';});
+audio.addEventListener('pause',function(){document.getElementById('btn-play').textContent='▶';});
+audio.addEventListener('ended',function(){document.getElementById('btn-play').textContent='▶';});
+
+audio.addEventListener('timeupdate', function() {
+  var t = audio.currentTime, dur = audio.duration||0;
+  document.getElementById('prog-fill').style.width = dur ? (t/dur*100)+'%' : '0%';
+  document.getElementById('time-disp').textContent = fmt(t)+' / '+fmt(dur);
+
+  // Active group
+  var rawIdx = -1;
+  for (var i=0; i<rawCues.length; i++) { if(t>=rawCues[i].start&&t<rawCues[i].end){rawIdx=i;break;} }
+  var gi = rawIdx>=0 ? cueToGroup[rawIdx] : -1;
+  if (gi !== activeGrp) {
+    var prev = activeGrp; activeGrp = gi;
+    if (prev>=0 && groupEls[prev]) { groupEls[prev].classList.remove('playing'); groupEls[prev].classList.add('past'); }
+    if (gi>=0 && groupEls[gi]) {
+      groupEls[gi].classList.remove('future','past'); groupEls[gi].classList.add('playing');
+      maybeScroll(groupEls[gi]);
+    }
+  }
+
+  // Moments trigger
+  var tInt = Math.floor(t);
+  if (tInt !== lastMomSec) {
+    lastMomSec = tInt;
+    moments.forEach(function(m) {
+      if (m.imgUrl && Math.abs(m.time - t) < 1.0) showMomentImage(m.imgUrl);
+    });
+  }
+});
+
+function seekTo(t) { audio.currentTime = t; if(audio.paused) audio.play(); }
+
+function scrub(e) {
+  var rect = document.getElementById('prog-wrap').getBoundingClientRect();
+  audio.currentTime = ((e.clientX - rect.left) / rect.width) * (audio.duration||0);
+}
+
+function cycleSpeed() {
+  speedIdx = (speedIdx+1) % speeds.length;
+  audio.playbackRate = speeds[speedIdx];
+  document.getElementById('speed-btn').textContent = speeds[speedIdx]+'×';
+}
+
+// ════════════════════════════════════════════
+// IMAGE PANEL
+// ════════════════════════════════════════════
+function showMomentImage(url) {
+  if (imgTimer) clearTimeout(imgTimer);
+  var img = document.getElementById('moment-img');
+  img.classList.remove('show');
+  img.src = url;
+  img.onload = function() { img.classList.add('show'); };
+  document.getElementById('img-panel').classList.add('show');
+  imgTimer = setTimeout(hideMomentImage, imgDuration * 1000);
+}
+function hideMomentImage() {
+  if (imgTimer) { clearTimeout(imgTimer); imgTimer = null; }
+  document.getElementById('moment-img').classList.remove('show');
+  setTimeout(function() {
+    document.getElementById('img-panel').classList.remove('show');
+    document.getElementById('moment-img').src='';
+  }, 500);
+}
+
+// ════════════════════════════════════════════
+// SCROLL
+// ════════════════════════════════════════════
+function maybeScroll(el) {
+  var wrap = transcriptWrap;
+  var wrapRect = wrap.getBoundingClientRect();
+  var elRect = el.getBoundingClientRect();
+  if (elRect.bottom > wrapRect.bottom * 0.85) {
+    var elOff = elRect.top - wrapRect.top + wrap.scrollTop;
+    var target = elOff - wrap.clientHeight * 0.22;
+    smoothScroll(wrap, Math.max(0, target), 1200);
+  }
+}
+function smoothScroll(el, targetY, dur) {
+  var startY=el.scrollTop, diff=targetY-startY;
+  if(Math.abs(diff)<8) return;
+  var t0=performance.now();
+  function step(now) {
+    var p=Math.min((now-t0)/dur,1);
+    var ease=p<0.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;
+    el.scrollTop=startY+diff*ease;
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// ════════════════════════════════════════════
+// UTILS
+// ════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
+  document.getElementById(id).classList.add('active');
+}
+function goBack() { if(audio) audio.pause(); hideMomentImage(); showScreen('s-upload'); }
+
+function showLoading(title, sub) {
+  document.getElementById('loading-msg').innerHTML = '<strong>'+title+'</strong>'+sub;
+  document.getElementById('loading').classList.add('show');
+}
+function hideLoading() { document.getElementById('loading').classList.remove('show'); }
+
+function blobToBase64(blob) {
+  return new Promise(function(res) {
+    var r = new FileReader();
+    r.onload = function(e) { res(e.target.result); };
+    r.readAsDataURL(blob);
+  });
+}
+function base64ToBlob(dataUrl) {
+  var parts = dataUrl.split(','), mime = parts[0].match(/:(.*?);/)[1];
+  var bin = atob(parts[1]), arr = new Uint8Array(bin.length);
+  for (var i=0; i<bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], {type: mime});
+}
+
+// ════════════════════════════════════════════
+// EVENT LISTENERS — no inline onclick
+// ════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', function() {
+
+  // Panel headers
+  document.getElementById('p-group').querySelector('.panel-hdr').addEventListener('click', function(){ togglePanel('p-group'); });
+  document.getElementById('p-moments').querySelector('.panel-hdr').addEventListener('click', function(){ togglePanel('p-moments'); });
+  document.getElementById('p-projects').querySelector('.panel-hdr').addEventListener('click', function(){ togglePanel('p-projects'); });
+
+  // Mode tabs
+  document.querySelectorAll('.tab').forEach(function(btn) {
+    btn.addEventListener('click', function(){ setGroupMode(btn.dataset.mode); });
+  });
+
+  // Steppers
+  document.querySelectorAll('.stp-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(){
+      var tgt = btn.getAttribute('data-target');
+      var delta = parseInt(btn.getAttribute('data-delta'));
+      stepVal(tgt, delta);
+    });
+  });
+
+  // Add moment
+  document.getElementById('btn-add-moment').addEventListener('click', function(){ addMoment(); });
+
+  // Project buttons
+  document.querySelector('.proj-actions .proj-action-btn:first-child').addEventListener('click', function(){ saveProject(); });
+  document.querySelector('.proj-actions .proj-action-btn:last-child').addEventListener('click', function(){ newProject(); });
+
+  // Start
+  document.getElementById('btn-start').addEventListener('click', function(){ startPlayer(); });
+
+  // Player controls
+  document.getElementById('btn-back').addEventListener('click', function(){ goBack(); });
+  document.getElementById('btn-play').addEventListener('click', function(){ togglePlay(); });
+  document.getElementById('prog-wrap').addEventListener('click', function(e){ scrub(e); });
+  document.getElementById('speed-btn').addEventListener('click', function(){ cycleSpeed(); });
+
+  // Modal
+  document.querySelector('.modal-btn.cancel').addEventListener('click', function(){ closeModal(); });
+  document.querySelector('.modal-btn.confirm').addEventListener('click', function(){ confirmSave(); });
+
+  // Enter key in modal
+  document.getElementById('modal-input').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') confirmSave();
+  });
+});
+</script>
+</body>
+</html>
